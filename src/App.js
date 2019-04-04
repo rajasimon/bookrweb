@@ -19,7 +19,7 @@ class App extends Component {
   }
 
   componentDidMount() {
-    const socket = new ReconnectingWebSocket('ws://' + 'localhost:8000' + '/ws/chat/stream/')
+    const socket = new ReconnectingWebSocket('ws://' + 'bookrtest.herokuapp.com' + '/ws/chat/stream/')
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data).message
@@ -35,7 +35,7 @@ class App extends Component {
     event.preventDefault()
   
     const r = Resumable({
-      target: 'https://bookrapi.herokuapp.com/upload/'
+      target: 'https://bookrtest.herokuapp.com/upload/'
     })
 
     // Using react ref to get the selected file
