@@ -35,7 +35,7 @@ class App extends Component {
     event.preventDefault()
   
     const r = Resumable({
-      target: 'http://localhost:8000/upload/'
+      target: 'https://bookrapi.herokuapp.com/upload/'
     })
 
     // Using react ref to get the selected file
