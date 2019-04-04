@@ -2,6 +2,7 @@ import React, { Component } from 'react';
 import '../node_modules/bulma/css/bulma.css';
 
 import Dropzone from 'dropzone';
+import SparkMD5 from 'spark-md5';
 
 class App extends Component {
   constructor() {
@@ -11,12 +12,15 @@ class App extends Component {
       filename: '',
       totalBytes: '',
       totalBytesSent: '',
-      uploadId: null
+      uploadId: null,
+      md5: null
     }
 
     this.registerDropzone = this.registerDropzone.bind(this)
     this.handleUpdateFilename = this.handleUpdateFilename.bind(this)
     this.handleUpdateProgress = this.handleUpdateProgress.bind(this)
+
+    this.calculate_md5 = this.calculate_md5.bind(this)
   }
 
   componentDidMount() {
@@ -24,7 +28,35 @@ class App extends Component {
     this.registerDropzone()
   }
 
+  calculate_md5 = (file, chunk_size) => {
+    var md5 = ""
+    var slice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
+        chunks = chunks = Math.ceil(file.size / chunk_size),
+        current_chunk = 0,
+        spark = new SparkMD5.ArrayBuffer();
+    function onload(e) {
+      spark.append(e.target.result);  // append chunk
+      current_chunk++;
+      if (current_chunk < chunks) {
+        read_next_chunk();
+      } else {
+        md5 = spark.end();
+        console.log(md5)
+      }
+    };
+
+    function read_next_chunk() {
+      var reader = new FileReader();
+      reader.onload = onload;
+      var start = current_chunk * chunk_size,
+          end = Math.min(start + chunk_size, file.size);
+      reader.readAsArrayBuffer(slice.call(file, start, end));
+    };
+    read_next_chunk();
+  }
+
   registerDropzone = () => {
+    
     var myDropzone = new Dropzone("#fileUploadInput", { 
       url: "http://localhost:8000/upload/",
       headers: {
@@ -41,8 +73,9 @@ class App extends Component {
         this.handleChunksUploaded()
       }.bind(this)
     });
-
+    
     myDropzone.on("addedfile", function(file) {
+      this.calculate_md5(file, 2000000)
       this.handleUpdateFilename(file.name)
     }.bind(this))
   }
@@ -65,6 +98,7 @@ class App extends Component {
   }
 
   handleChunksUploaded() {
+    console.log(this.state)
     fetch('http://localhost:8000/upload_complete/', {
       method: 'POST',
       body: JSON.stringify({upload_id: this.state.uploadId})
