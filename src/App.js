@@ -1,8 +1,8 @@
 import React, { Component } from 'react';
 import '../node_modules/bulma/css/bulma.css';
 
-import Dropzone from 'dropzone';
-import SparkMD5 from 'spark-md5';
+import Resumable from 'resumablejs';
+import ReconnectingWebSocket from 'reconnecting-websocket';
 
 class App extends Component {
   constructor() {
@@ -10,101 +10,61 @@ class App extends Component {
 
     this.state = {
       filename: '',
-      totalBytes: '',
-      totalBytesSent: '',
-      uploadId: null,
-      md5: null
+      progress: '',
+      message: ''
     }
+    this.fileInput = React.createRef();
 
-    this.registerDropzone = this.registerDropzone.bind(this)
-    this.handleUpdateFilename = this.handleUpdateFilename.bind(this)
-    this.handleUpdateProgress = this.handleUpdateProgress.bind(this)
-
-    this.calculate_md5 = this.calculate_md5.bind(this)
+    this.handleUpload = this.handleUpload.bind(this)
   }
 
   componentDidMount() {
-    // Register dropzone function
-    this.registerDropzone()
-  }
+    const socket = new ReconnectingWebSocket('ws://' + 'localhost:8000' + '/ws/chat/stream/')
 
-  calculate_md5 = (file, chunk_size) => {
-    var md5 = ""
-    var slice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
-        chunks = chunks = Math.ceil(file.size / chunk_size),
-        current_chunk = 0,
-        spark = new SparkMD5.ArrayBuffer();
-    function onload(e) {
-      spark.append(e.target.result);  // append chunk
-      current_chunk++;
-      if (current_chunk < chunks) {
-        read_next_chunk();
-      } else {
-        md5 = spark.end();
-        console.log(md5)
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data).message
+      
+      if (data.isCompleted) {
+        this.setState({message: data.result})
       }
-    };
-
-    function read_next_chunk() {
-      var reader = new FileReader();
-      reader.onload = onload;
-      var start = current_chunk * chunk_size,
-          end = Math.min(start + chunk_size, file.size);
-      reader.readAsArrayBuffer(slice.call(file, start, end));
-    };
-    read_next_chunk();
+    }
   }
 
-  registerDropzone = () => {
-    
-    var myDropzone = new Dropzone("#fileUploadInput", { 
-      url: "http://localhost:8000/upload/",
-      headers: {
-        'Cache-Control': null
-      },
-      uploadMultiple: false,
-      chunking: true,
-      forceChunking: true,
-      params: function(files, xhr, chunk) {
-        this.handleUpdateProgress(xhr, chunk)
-      }.bind(this),
-      chunksUploaded: function(file, done) {
-        // Tell the server that it completed the function
-        this.handleChunksUploaded()
-      }.bind(this)
-    });
-    
-    myDropzone.on("addedfile", function(file) {
-      this.calculate_md5(file, 2000000)
-      this.handleUpdateFilename(file.name)
-    }.bind(this))
-  }
+  handleUpload(event) {
+    // Prevent to submit normal form we need to process here.
+    event.preventDefault()
   
-  handleUpdateFilename(filename) {
-    this.setState({filename: filename})
-  }
-
-  handleUpdateProgress(xhr, chunk) {
-    // xhr response only available after returns the response
-    xhr.addEventListener("progress", function(event) {
-      const parsedResponse = JSON.parse(xhr.response)
-      console.log(parsedResponse)
-      this.setState({
-        uploadId: parsedResponse.upload_id,
-        totalBytes: chunk.progress,
-        totalBytesSent: chunk.index
-      })
-    }.bind(this))
-  }
-
-  handleChunksUploaded() {
-    console.log(this.state)
-    fetch('http://localhost:8000/upload_complete/', {
-      method: 'POST',
-      body: JSON.stringify({upload_id: this.state.uploadId})
+    const r = Resumable({
+      target: 'http://localhost:8000/upload/'
     })
-    .then(res => res.json())
-    .then(response => console.log(response))
+
+    // Using react ref to get the selected file
+    r.addFile(this.fileInput.current.files[0])
+
+    // Listening fileadded event
+    r.on('fileAdded', function(file) {
+      // Get the filename and update the file field
+      this.setState({fileName: file.name})
+
+      // Start uploading the file to server
+      r.upload()
+    }.bind(this))
+
+    r.on('fileSuccess', function(file,message){
+      console.log(message)
+    });
+
+    r.on('fileError', function(file, message) {
+      console.log(message)
+    })
+
+    r.on('fileProgress', function(file) {
+      this.setState({progress: r.progress()})
+    }.bind(this))
+
+    r.on('cancel', function() {
+      console.log('cancelled')
+    })
   }
 
   render() {
@@ -119,27 +79,34 @@ class App extends Component {
                   Perform smooth file upload to server without breaking the user flow. 
                 </p>
                 <form>
-                  <div className="file has-name is-fullwidth">
-                    <label className="file-label">
-                      <input className="file-input" id="fileUploadInput" type="file" name="resume" />
-                      <span className="file-cta">
-                        <span className="file-icon">
-                          <i className="fas fa-upload"></i>
+                  <div className="field">
+                    <div className="file has-name is-fullwidth">
+                      <label className="file-label">
+                        <input className="file-input" id="fileUploadInput" type="file" name="resume" ref={this.fileInput}/>
+                        <span className="file-cta">
+                          <span className="file-icon">
+                            <i className="fas fa-upload"></i>
+                          </span>
+                          <span className="file-label">
+                            Choose a file…
+                          </span>
                         </span>
-                        <span className="file-label">
-                          Choose a file…
+                        <span className="file-name">
+                          {this.state.filename}
                         </span>
-                      </span>
-                      <span className="file-name">
-                        {this.state.filename}
-                      </span>
-                    </label>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="field">
+                    <div className="control">
+                    <button  className="button is-primary" onClick={this.handleUpload}>Upload</button>
+                    </div>
                   </div>
                 </form>
                 <br></br>
-                <progress className="progress is-small" value={this.state.totalBytesSent} max="100">15%</progress>
+                <progress className="progress is-small" value={this.state.progress} max="1"></progress>
                 <div>
-                  Status: Message
+                  Status: {this.state.message}
                 </div>
               </div>
             </div>
