@@ -19,7 +19,7 @@ class App extends Component {
   }
 
   componentDidMount() {
-    const socket = new ReconnectingWebSocket('ws://' + 'bookrtest.herokuapp.com' + '/ws/chat/stream/')
+    const socket = new ReconnectingWebSocket('wss://' + 'bookrtest.herokuapp.com' + '/ws/chat/stream/')
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data).message
